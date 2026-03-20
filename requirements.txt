@@ -4,3 +4,4 @@ torchvision>=0.15.0
 Pillow>=10.0.0
 pyyaml>=6.0
 numpy>=1.24.0
+sahi>=0.11.0

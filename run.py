@@ -8,6 +8,9 @@ It tries multiple input methods to be robust:
   2. --image <path>                  (single image)
   3. sys.argv[1:]                    (list of image paths)
   4. Reads IMAGE_DIR env var as fallback
+
+Tiled inference (SAHI) is used by default to improve detection of small products
+on high-resolution shelf images (2000x1500px). Use --no-tile to disable.
 """
 
 import argparse
@@ -18,6 +21,13 @@ from pathlib import Path
 
 import torch
 from ultralytics import YOLO
+
+try:
+    from sahi import AutoDetectionModel
+    from sahi.predict import get_sliced_prediction
+    SAHI_AVAILABLE = True
+except ImportError:
+    SAHI_AVAILABLE = False
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -63,7 +73,57 @@ def image_id_from_path(img_path: Path) -> int | str:
     return int(digits) if digits else stem
 
 
-# ── main inference ─────────────────────────────────────────────────────────────
+# ── tiled inference (SAHI) ────────────────────────────────────────────────────
+
+def run_tiled_inference(
+    image_paths: list[Path],
+    weights: str,
+    conf: float = 0.15,
+    tile_size: int = 640,
+    overlap: float = 0.2,
+) -> list[dict]:
+    """Run SAHI tiled inference for improved small-object detection."""
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    detection_model = AutoDetectionModel.from_pretrained(
+        model_type="ultralytics",
+        model_path=weights,
+        confidence_threshold=conf,
+        device=device,
+    )
+
+    results = []
+    for img_path in image_paths:
+        img_id = image_id_from_path(img_path)
+        result = get_sliced_prediction(
+            str(img_path),
+            detection_model,
+            slice_height=tile_size,
+            slice_width=tile_size,
+            overlap_height_ratio=overlap,
+            overlap_width_ratio=overlap,
+            postprocess_type="NMS",
+            postprocess_match_threshold=0.5,
+            verbose=0,
+        )
+        for obj in result.object_prediction_list:
+            b = obj.bbox
+            results.append(
+                {
+                    "image_id": img_id,
+                    "category_id": obj.category.id,
+                    "bbox": [
+                        round(b.minx, 2),
+                        round(b.miny, 2),
+                        round(b.maxx - b.minx, 2),
+                        round(b.maxy - b.miny, 2),
+                    ],
+                    "score": round(obj.score.value, 4),
+                }
+            )
+    return results
+
+
+# ── standard inference ─────────────────────────────────────────────────────────
 
 def run_inference(image_paths: list[Path], model: YOLO, conf: float = 0.25) -> list[dict]:
     """Run YOLO inference and return COCO-format result list."""
@@ -106,7 +166,10 @@ def main():
     parser.add_argument("--input", type=str, help="Directory with input images")
     parser.add_argument("--output", type=str, help="Path to write predictions JSON")
     parser.add_argument("--image", type=str, help="Single image path")
-    parser.add_argument("--conf", type=float, default=0.25, help="Confidence threshold")
+    parser.add_argument("--conf", type=float, default=0.15, help="Confidence threshold")
+    parser.add_argument("--no-tile", action="store_true", help="Disable tiled inference (use standard inference)")
+    parser.add_argument("--tile-size", type=int, default=640, help="Tile size for sliced inference")
+    parser.add_argument("--overlap", type=float, default=0.2, help="Tile overlap ratio")
     args, extra = parser.parse_known_args()
 
     # Determine image sources
@@ -133,8 +196,20 @@ def main():
         print(f"Running inference on {len(image_paths)} image(s)...", file=sys.stderr)
         weights = find_model_weights()
         print(f"Loading model from {weights}", file=sys.stderr)
-        model = YOLO(weights)
-        predictions = run_inference(image_paths, model, conf=args.conf)
+
+        use_tiling = SAHI_AVAILABLE and not args.no_tile
+        if use_tiling:
+            print(f"Using tiled inference (tile={args.tile_size}, overlap={args.overlap})", file=sys.stderr)
+            predictions = run_tiled_inference(
+                image_paths, weights, conf=args.conf,
+                tile_size=args.tile_size, overlap=args.overlap,
+            )
+        else:
+            if not args.no_tile and not SAHI_AVAILABLE:
+                print("WARNING: sahi not available, falling back to standard inference", file=sys.stderr)
+            model = YOLO(weights)
+            predictions = run_inference(image_paths, model, conf=args.conf)
+
         print(f"Generated {len(predictions)} detections.", file=sys.stderr)
 
     # Output

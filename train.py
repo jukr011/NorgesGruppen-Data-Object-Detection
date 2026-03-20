@@ -122,12 +122,14 @@ def write_dataset_yaml(yolo_dir: Path, names: list[str]) -> Path:
 
 def train(
     data_yaml: Path,
-    model_size: str = "s",
-    epochs: int = 50,
+    model_size: str = "m",
+    epochs: int = 100,
     imgsz: int = 1280,
     batch: int = 8,
     workers: int = 4,
     resume: bool = False,
+    patience: int = 50,
+    cos_lr: bool = True,
 ):
     """Fine-tune YOLOv8 on the NorgesGruppen dataset."""
     model_name = f"yolov8{model_size}.pt"
@@ -141,8 +143,14 @@ def train(
         batch=batch,
         workers=workers,
         resume=resume,
+        patience=patience,
         project="runs/detect",
         name="train",
+        # Learning rate schedule
+        cos_lr=cos_lr,
+        warmup_epochs=3,
+        # Better classification with many classes
+        label_smoothing=0.1,
         # Augmentation helpful for shelf images
         hsv_h=0.015,
         hsv_s=0.7,
@@ -153,6 +161,7 @@ def train(
         flipud=0.0,
         fliplr=0.5,
         mosaic=1.0,
+        close_mosaic=10,  # disable mosaic in final 10 epochs for stable convergence
         # Save best checkpoint
         save=True,
         save_period=-1,  # only save best and last
@@ -174,13 +183,15 @@ def main():
         help="Path to unzipped NM_NGD_coco_dataset folder (contains annotations.json + images/)"
     )
     parser.add_argument("--yolo-dir", default="data/yolo", help="Where to write YOLO-format data")
-    parser.add_argument("--model", default="s", choices=["n", "s", "m", "l", "x"],
+    parser.add_argument("--model", default="m", choices=["n", "s", "m", "l", "x"],
                         help="YOLOv8 model size: n(ano), s(mall), m(edium), l(arge), x(large)")
-    parser.add_argument("--epochs", type=int, default=50)
+    parser.add_argument("--epochs", type=int, default=100)
     parser.add_argument("--imgsz", type=int, default=1280)
     parser.add_argument("--batch", type=int, default=8)
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--val-fraction", type=float, default=0.1)
+    parser.add_argument("--patience", type=int, default=50, help="Early stopping patience epochs")
+    parser.add_argument("--no-cos-lr", action="store_true", help="Disable cosine LR schedule")
     parser.add_argument("--resume", action="store_true", help="Resume interrupted training")
     parser.add_argument(
         "--skip-convert", action="store_true",
@@ -209,6 +220,8 @@ def main():
         batch=args.batch,
         workers=args.workers,
         resume=args.resume,
+        patience=args.patience,
+        cos_lr=not args.no_cos_lr,
     )
 
 

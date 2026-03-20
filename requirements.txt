@@ -1,7 +1,9 @@
-ultralytics>=8.3.0
-torch>=2.0.0
-torchvision>=0.15.0
+# Sandbox pre-installed versions — pin these to avoid version mismatch on the server
+ultralytics==8.1.0
+torch==2.6.0
+torchvision==0.21.0
 Pillow>=10.0.0
-pyyaml>=6.0
 numpy>=1.24.0
-sahi>=0.11.0
+
+# Local training only (not needed in sandbox):
+# pyyaml>=6.0

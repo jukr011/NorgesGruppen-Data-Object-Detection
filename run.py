@@ -15,6 +15,7 @@ import json
 import os
 import sys
 from pathlib import Path
+from typing import Union
 
 import torch
 from ultralytics import YOLO
@@ -55,7 +56,7 @@ def collect_images(paths: list[str]) -> list[Path]:
     return images
 
 
-def image_id_from_path(img_path: Path) -> int | str:
+def image_id_from_path(img_path: Path) -> Union[int, str]:
     """Try to parse a numeric image id from the filename, else return the stem."""
     stem = img_path.stem
     # e.g. img_00042 → 42

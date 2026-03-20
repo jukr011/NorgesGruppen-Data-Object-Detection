@@ -15,7 +15,7 @@ import json
 import os
 import sys
 from pathlib import Path
-from typing import Union
+from typing import List, Union
 
 import torch
 from ultralytics import YOLO
@@ -41,7 +41,7 @@ def find_model_weights() -> str:
     )
 
 
-def collect_images(paths: list[str]) -> list[Path]:
+def collect_images(paths: List[str]) -> List[Path]:
     """Expand directories and filter image files."""
     IMG_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
     images = []
@@ -66,7 +66,7 @@ def image_id_from_path(img_path: Path) -> Union[int, str]:
 
 # ── main inference ─────────────────────────────────────────────────────────────
 
-def run_inference(image_paths: list[Path], model: YOLO, conf: float = 0.25) -> list[dict]:
+def run_inference(image_paths: List[Path], model: YOLO, conf: float = 0.25) -> List[dict]:
     """Run YOLO inference and return COCO-format result list."""
     results = []
 
@@ -111,7 +111,7 @@ def main():
     args, extra = parser.parse_known_args()
 
     # Determine image sources
-    sources: list[str] = []
+    sources: List[str] = []
     if args.input:
         sources.append(args.input)
     if args.image:

@@ -30,12 +30,13 @@ def find_model_weights() -> str:
         "model/best.pt",
         "last.pt",
         "weights/last.pt",
+        "yolov8s.pt",   # pretrained baseline fallback
     ]
     for c in candidates:
         if os.path.exists(c):
             return c
     raise FileNotFoundError(
-        "No model weights found. Expected best.pt in the zip root or weights/ folder."
+        "No model weights found. Expected best.pt or yolov8s.pt in the zip root."
     )
 
 

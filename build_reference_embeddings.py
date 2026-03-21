@@ -108,19 +108,8 @@ def build_barcode_to_catid(coco: dict, refs_dir: Path) -> dict:
     else:
         print("  Strategy 2: no metadata.json found — trying strategy 3")
 
-    # ── Strategy 3: substring match of barcode against category names ─────────
-    cat_name_to_id = {normalise_name(c["name"]): c["id"]
-                      for c in coco["categories"]}
-    for folder in refs_dir.iterdir():
-        if not folder.is_dir():
-            continue
-        barcode = folder.name
-        for cat_name, cat_id in cat_name_to_id.items():
-            if barcode in cat_name or cat_name in barcode:
-                code_to_catid[barcode] = cat_id
-                break
-
-    print(f"  Strategy 3: matched {len(code_to_catid)} barcodes via name substring")
+    # No reliable mapping found
+    print("  No barcode→category mapping found — re-ranking will be disabled")
     return code_to_catid
 
 

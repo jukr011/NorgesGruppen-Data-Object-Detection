@@ -157,7 +157,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input",  required=True)
     parser.add_argument("--output", required=True)
-    parser.add_argument("--conf",         type=float, default=0.10,
+    parser.add_argument("--conf",         type=float, default=0.15,
                         help="Minimum detection confidence")
     parser.add_argument("--iou",          type=float, default=0.45,
                         help="IoU threshold for WBF/NMS")
@@ -167,8 +167,8 @@ def main():
                         help="Tile overlap fraction (0=no overlap, 0.25=25%%)")
     parser.add_argument("--no-tta",  action="store_true",
                         help="Disable test-time augmentation (horizontal flip)")
-    parser.add_argument("--no-tile", action="store_true",
-                        help="Disable tiled inference")
+    parser.add_argument("--tile",    action="store_true",
+                        help="Enable tiled inference (experimental)")
     args = parser.parse_args()
 
     print(f"Input:  {args.input}",  flush=True)
@@ -218,7 +218,7 @@ def main():
     print(f"Found {len(images)} images  tile={not args.no_tile}  tta={not args.no_tta}", flush=True)
 
     do_tta  = not args.no_tta
-    do_tile = not args.no_tile
+    do_tile = args.tile
     predictions = []
 
     for img_path in images:

@@ -139,8 +139,12 @@ def main():
         ref_embs = torch.from_numpy(np.load(str(emb_path))).to(device)  # (N, D)
         with open(str(lbl_path)) as f:
             ref_labels = json.load(f)
-        classifier = load_classifier(cls_path, device)
-        print(f"  {len(ref_labels)} reference categories loaded", flush=True)
+        if len(ref_labels) == 0:
+            use_rerank = False
+            print("  Reference embeddings empty — using YOLO classification only", flush=True)
+        else:
+            classifier = load_classifier(cls_path, device)
+            print(f"  {len(ref_labels)} reference categories loaded", flush=True)
     else:
         print("No reference embeddings — using YOLO classification only", flush=True)
 

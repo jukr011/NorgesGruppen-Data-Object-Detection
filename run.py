@@ -1,6 +1,12 @@
+import subprocess
+import sys
+
+# Ensure dependencies are available in evaluation environment
+subprocess.check_call([sys.executable, "-m", "pip", "install", "ultralytics", "-q"],
+                      stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+
 import argparse
 import json
-import sys
 from pathlib import Path
 
 import torch
@@ -14,6 +20,7 @@ def main():
     parser.add_argument("--conf", type=float, default=0.15)
     args = parser.parse_args()
 
+    print(f"Python: {sys.version}", flush=True)
     print(f"Input: {args.input}", flush=True)
     print(f"Output: {args.output}", flush=True)
 
@@ -21,7 +28,7 @@ def main():
     print(f"Device: {device}", flush=True)
 
     model_path = Path(__file__).parent / "best.pt"
-    print(f"Model path: {model_path} (exists={model_path.exists()})", flush=True)
+    print(f"Model: {model_path} (exists={model_path.exists()})", flush=True)
     model = YOLO(str(model_path))
 
     input_path = Path(args.input)
@@ -32,7 +39,6 @@ def main():
     predictions = []
     for img in images:
         try:
-            # Parse image_id from filename stem
             stem = img.stem
             parts = stem.split("_")
             image_id = int(parts[-1])

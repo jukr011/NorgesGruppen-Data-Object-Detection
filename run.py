@@ -215,7 +215,7 @@ def main():
     input_path = Path(args.input)
     images = sorted([f for f in input_path.iterdir()
                      if f.suffix.lower() in (".jpg", ".jpeg", ".png")])
-    print(f"Found {len(images)} images  tile={not args.no_tile}  tta={not args.no_tta}", flush=True)
+    print(f"Found {len(images)} images  tile={args.tile}  tta={not args.no_tta}", flush=True)
 
     do_tta  = not args.no_tta
     do_tile = args.tile

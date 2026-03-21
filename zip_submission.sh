@@ -15,8 +15,8 @@ fi
 OUTPUT="submission.zip"
 rm -f "$OUTPUT"
 
-# Core files (always included)
-FILES="run.py requirements.txt best.pt"
+# Core files (always included) — requirements.txt excluded: .txt not an allowed file type
+FILES="run.py best.pt"
 
 # Optional re-ranking files (included if present)
 [ -f "feature_extractor.pt" ]       && FILES="$FILES feature_extractor.pt"

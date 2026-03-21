@@ -16,7 +16,9 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Device: {device}")
 
-    model = YOLO("best.pt")
+    model_path = Path(__file__).parent / "best.pt"
+    print(f"Loading model from: {model_path}")
+    model = YOLO(str(model_path))
     predictions = []
 
     for img in sorted(Path(args.input).iterdir()):

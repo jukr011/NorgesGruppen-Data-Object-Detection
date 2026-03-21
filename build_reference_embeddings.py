@@ -86,19 +86,25 @@ def build_barcode_to_catid(coco: dict, refs_dir: Path) -> dict:
         cat_name_to_id = {normalise_name(c["name"]): c["id"]
                           for c in coco["categories"]}
 
-        # metadata may be a list or dict keyed by barcode
-        items = metadata if isinstance(metadata, list) else list(metadata.values())
-        for item in items:
-            barcode  = str(item.get("barcode") or item.get("product_code") or item.get("gtin", ""))
-            raw_name = item.get("product_name") or item.get("name", "")
-            cat_id   = cat_name_to_id.get(normalise_name(raw_name))
-            if barcode and cat_id is not None:
-                code_to_catid[barcode] = cat_id
+        # metadata may be a list of dicts, or a dict keyed by barcode (values may be dicts or ints)
+        if isinstance(metadata, list):
+            items = [(None, item) for item in metadata]
+        else:
+            items = list(metadata.items())
+
+        for key, val in items:
+            if isinstance(val, dict):
+                barcode  = str(val.get("barcode") or val.get("product_code") or val.get("gtin") or key or "")
+                raw_name = val.get("product_name") or val.get("name", "")
+                cat_id   = cat_name_to_id.get(normalise_name(raw_name))
+                if barcode and cat_id is not None:
+                    code_to_catid[barcode] = cat_id
+            # If val is int/str (e.g. {barcode: count}), no product name available — skip
 
         if code_to_catid:
             print(f"  Strategy 2: matched {len(code_to_catid)} barcodes via metadata.json")
             return code_to_catid
-        print("  Strategy 2: metadata.json found but no matches — trying strategy 3")
+        print("  Strategy 2: metadata.json found but values have no product names — trying strategy 3")
     else:
         print("  Strategy 2: no metadata.json found — trying strategy 3")
 

@@ -7,8 +7,9 @@
 
 set -e
 
-if [ ! -f "best.pt" ]; then
-  echo "ERROR: best.pt not found. Train the model first (python train.py ...)"
+if [ ! -f "best.onnx" ]; then
+  echo "ERROR: best.onnx not found. Export the model first:"
+  echo "  python -c \"from ultralytics import YOLO; YOLO('best.pt').export(format='onnx', imgsz=640, simplify=True)\""
   exit 1
 fi
 
@@ -16,7 +17,7 @@ OUTPUT="submission.zip"
 rm -f "$OUTPUT"
 
 # Core files (always included) — requirements.txt excluded: .txt not an allowed file type
-FILES="run.py best.pt"
+FILES="run.py best.onnx"
 
 # Optional re-ranking files (included if present)
 [ -f "feature_extractor.pt" ]       && FILES="$FILES feature_extractor.pt"

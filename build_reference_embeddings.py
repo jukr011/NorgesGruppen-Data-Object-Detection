@@ -86,8 +86,10 @@ def build_barcode_to_catid(coco: dict, refs_dir: Path) -> dict:
         cat_name_to_id = {normalise_name(c["name"]): c["id"]
                           for c in coco["categories"]}
 
-        # metadata may be a list of dicts, or a dict keyed by barcode (values may be dicts or ints)
-        if isinstance(metadata, list):
+        # metadata may be a list of dicts, a dict with a 'products' list, or a dict keyed by barcode
+        if isinstance(metadata, dict) and "products" in metadata and isinstance(metadata["products"], list):
+            items = [(None, item) for item in metadata["products"]]
+        elif isinstance(metadata, list):
             items = [(None, item) for item in metadata]
         else:
             items = list(metadata.items())

@@ -228,18 +228,18 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input",  required=True)
     parser.add_argument("--output", required=True)
-    parser.add_argument("--conf",         type=float, default=0.10,
+    parser.add_argument("--conf",         type=float, default=0.15,
                         help="Minimum detection confidence")
     parser.add_argument("--iou",          type=float, default=0.45,
                         help="IoU threshold for WBF/NMS")
     parser.add_argument("--sim-thresh",   type=float, default=0.50,
                         help="Cosine similarity threshold for reference re-ranking")
-    parser.add_argument("--tile-overlap", type=float, default=0.30,
-                        help="Tile overlap fraction (0=no overlap, 0.30=30%%)")
+    parser.add_argument("--tile-overlap", type=float, default=0.25,
+                        help="Tile overlap fraction (0=no overlap, 0.25=25%%)")
     parser.add_argument("--no-tta",  action="store_true",
                         help="Disable test-time augmentation (horizontal flip)")
-    parser.add_argument("--no-tile", action="store_true",
-                        help="Disable tiled inference")
+    parser.add_argument("--tile",    action="store_true",
+                        help="Enable tiled inference (experimental)")
     args = parser.parse_args()
 
     print(f"Input:  {args.input}",  flush=True)
@@ -287,7 +287,7 @@ def main():
     images = sorted([f for f in input_path.iterdir()
                      if f.suffix.lower() in (".jpg", ".jpeg", ".png")])
     do_tta  = not args.no_tta
-    do_tile = not args.no_tile
+    do_tile = args.tile
     print(f"Found {len(images)} images  tile={do_tile}  tta={do_tta}", flush=True)
     predictions = []
 
@@ -364,6 +364,10 @@ def main():
 
             cat_id = int(all_classes[i])
             score  = float(all_scores[i])
+
+            # Skip 'unknown_product' class (355) — not a valid competition category
+            if cat_id >= 355:
+                continue
 
             if use_rerank and score >= 0.25:
                 crop = img.crop((rx1, ry1, rx2, ry2))

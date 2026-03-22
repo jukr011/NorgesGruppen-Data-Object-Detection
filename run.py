@@ -15,11 +15,79 @@ from PIL import Image
 import torch
 import torchvision.models as tvm
 
-try:
-    from ensemble_boxes import weighted_boxes_fusion
-    WBF_AVAILABLE = True
-except ImportError:
-    WBF_AVAILABLE = False
+def weighted_boxes_fusion(boxes_list, scores_list, labels_list,
+                          iou_thr=0.55, skip_box_thr=0.0):
+    """
+    Native WBF implementation — no external package needed.
+    boxes in [0,1] format [x1,y1,x2,y2].
+    Score of each cluster = sum(scores) / n_models, so boxes seen in
+    more views get higher relative score (proper ensemble behaviour).
+    """
+    n_models = len(boxes_list)
+    if n_models == 0:
+        return np.zeros((0, 4)), np.zeros(0), np.zeros(0, dtype=int)
+
+    flat_b, flat_s, flat_l = [], [], []
+    for boxes, scores, labels in zip(boxes_list, scores_list, labels_list):
+        for b, s, l in zip(boxes, scores, labels):
+            if s >= skip_box_thr:
+                flat_b.append(np.asarray(b, dtype=np.float32))
+                flat_s.append(float(s))
+                flat_l.append(int(l))
+
+    if not flat_b:
+        return np.zeros((0, 4)), np.zeros(0), np.zeros(0, dtype=int)
+
+    flat_b = np.array(flat_b)
+    flat_s = np.array(flat_s)
+    flat_l = np.array(flat_l, dtype=int)
+    order  = np.argsort(-flat_s)
+    flat_b, flat_s, flat_l = flat_b[order], flat_s[order], flat_l[order]
+
+    c_boxes, c_scores, c_labels, c_avg = [], [], [], []
+
+    for b, s, l in zip(flat_b, flat_s, flat_l):
+        best_ci, best_iou = -1, iou_thr
+        for ci, avg_b in enumerate(c_avg):
+            if c_labels[ci][int(np.argmax(c_scores[ci]))] != l:
+                continue
+            ix1 = max(b[0], avg_b[0]); iy1 = max(b[1], avg_b[1])
+            ix2 = min(b[2], avg_b[2]); iy2 = min(b[3], avg_b[3])
+            inter = max(0.0, ix2 - ix1) * max(0.0, iy2 - iy1)
+            union = ((b[2]-b[0])*(b[3]-b[1]) +
+                     (avg_b[2]-avg_b[0])*(avg_b[3]-avg_b[1]) - inter)
+            iou_v = inter / union if union > 0 else 0.0
+            if iou_v > best_iou:
+                best_iou, best_ci = iou_v, ci
+
+        if best_ci >= 0:
+            c_boxes[best_ci].append(b)
+            c_scores[best_ci].append(s)
+            c_labels[best_ci].append(l)
+            ws = np.array(c_scores[best_ci])
+            c_avg[best_ci] = np.average(np.array(c_boxes[best_ci]), axis=0, weights=ws)
+        else:
+            c_boxes.append([b]); c_scores.append([s])
+            c_labels.append([l]); c_avg.append(b.copy())
+
+    out_b, out_s, out_l = [], [], []
+    for cb, cs, cl, avg_b in zip(c_boxes, c_scores, c_labels, c_avg):
+        final_score = sum(cs) / n_models
+        if final_score < skip_box_thr:
+            continue
+        lab_s = {}
+        for ll, ss in zip(cl, cs):
+            lab_s[ll] = lab_s.get(ll, 0) + ss
+        out_b.append(avg_b)
+        out_s.append(final_score)
+        out_l.append(max(lab_s, key=lab_s.get))
+
+    if not out_b:
+        return np.zeros((0, 4)), np.zeros(0), np.zeros(0, dtype=int)
+    return np.array(out_b), np.array(out_s), np.array(out_l, dtype=int)
+
+
+WBF_AVAILABLE = True
 
 
 # ── Image preprocessing ───────────────────────────────────────────────────────
@@ -93,26 +161,29 @@ def decode_preds(pred: np.ndarray, conf_thr: float):
 
 def infer_region(session, input_name, region: Image.Image, INPUT_SIZE, do_tta, conf_thr):
     """
-    Letterbox region to INPUT_SIZE, run YOLO (+TTA), return detections in
-    region-pixel coordinates as (boxes_xyxy, scores, classes).
+    Letterbox region to INPUT_SIZE, run YOLO (+TTA), return list of
+    (boxes_xyxy, scores, classes) — one entry per inference view so that
+    WBF can properly fuse them as separate models.
     """
     inp, scale, pad_x, pad_y, orig_w, orig_h = letterbox(region, INPUT_SIZE)
-    pred = run_session(session, input_name, inp)
+    view_preds = [run_session(session, input_name, inp)]
     if do_tta:
         pred_flip = run_session(session, input_name, hflip(inp))
         pred_flip[:, 0] = INPUT_SIZE - pred_flip[:, 0]  # un-flip cx
-        pred = np.concatenate([pred, pred_flip], axis=0)
+        view_preds.append(pred_flip)
 
-    boxes_lb, scores, classes = decode_preds(pred, conf_thr)
-    if len(boxes_lb) == 0:
-        return np.zeros((0, 4)), scores, classes
-
-    # Convert from letterbox space → region pixel space
-    x1 = np.clip((boxes_lb[:, 0] - pad_x) / scale, 0.0, orig_w)
-    y1 = np.clip((boxes_lb[:, 1] - pad_y) / scale, 0.0, orig_h)
-    x2 = np.clip((boxes_lb[:, 2] - pad_x) / scale, 0.0, orig_w)
-    y2 = np.clip((boxes_lb[:, 3] - pad_y) / scale, 0.0, orig_h)
-    return np.stack([x1, y1, x2, y2], axis=1), scores, classes
+    results = []
+    for pred in view_preds:
+        boxes_lb, scores, classes = decode_preds(pred, conf_thr)
+        if len(boxes_lb) == 0:
+            results.append((np.zeros((0, 4)), scores, classes))
+            continue
+        x1 = np.clip((boxes_lb[:, 0] - pad_x) / scale, 0.0, orig_w)
+        y1 = np.clip((boxes_lb[:, 1] - pad_y) / scale, 0.0, orig_h)
+        x2 = np.clip((boxes_lb[:, 2] - pad_x) / scale, 0.0, orig_w)
+        y2 = np.clip((boxes_lb[:, 3] - pad_y) / scale, 0.0, orig_h)
+        results.append((np.stack([x1, y1, x2, y2], axis=1), scores, classes))
+    return results
 
 
 def get_tile_offsets(total: int, tile: int, stride: int) -> list:
@@ -241,8 +312,8 @@ def main():
             labels_list.append(classes.tolist())
 
         # ── 1. Full-image inference (downsampled to INPUT_SIZE) ────────────
-        b, s, c = infer_region(session, input_name, img, INPUT_SIZE, do_tta, args.conf)
-        _add(b, s, c)
+        for b, s, c in infer_region(session, input_name, img, INPUT_SIZE, do_tta, args.conf):
+            _add(b, s, c)
 
         # ── 2. Tiled inference (native resolution for each tile) ───────────
         if do_tile and (W > TILE_SIZE or H > TILE_SIZE):
@@ -254,15 +325,12 @@ def main():
                     tw = min(TILE_SIZE, W - tx)
                     th = min(TILE_SIZE, H - ty)
                     tile_img = img.crop((tx, ty, tx + tw, ty + th))
-                    tb, ts, tc = infer_region(session, input_name, tile_img,
-                                              INPUT_SIZE, do_tta, args.conf)
-                    if len(tb) > 0:
-                        # Shift from tile-local → image coordinates
-                        tb[:, 0] += tx
-                        tb[:, 1] += ty
-                        tb[:, 2] += tx
-                        tb[:, 3] += ty
-                    _add(tb, ts, tc)
+                    for tb, ts, tc in infer_region(session, input_name, tile_img,
+                                                   INPUT_SIZE, do_tta, args.conf):
+                        if len(tb) > 0:
+                            tb[:, 0] += tx; tb[:, 2] += tx
+                            tb[:, 1] += ty; tb[:, 3] += ty
+                        _add(tb, ts, tc)
 
         if not boxes_list:
             continue

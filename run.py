@@ -72,7 +72,7 @@ def weighted_boxes_fusion(boxes_list, scores_list, labels_list,
 
     out_b, out_s, out_l = [], [], []
     for cb, cs, cl, avg_b in zip(c_boxes, c_scores, c_labels, c_avg):
-        final_score = sum(cs) / n_models
+        final_score = max(cs)
         if final_score < skip_box_thr:
             continue
         lab_s = {}

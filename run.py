@@ -228,18 +228,18 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input",  required=True)
     parser.add_argument("--output", required=True)
-    parser.add_argument("--conf",         type=float, default=0.15,
+    parser.add_argument("--conf",         type=float, default=0.10,
                         help="Minimum detection confidence")
     parser.add_argument("--iou",          type=float, default=0.45,
                         help="IoU threshold for WBF/NMS")
     parser.add_argument("--sim-thresh",   type=float, default=0.50,
                         help="Cosine similarity threshold for reference re-ranking")
-    parser.add_argument("--tile-overlap", type=float, default=0.25,
-                        help="Tile overlap fraction (0=no overlap, 0.25=25%%)")
+    parser.add_argument("--tile-overlap", type=float, default=0.30,
+                        help="Tile overlap fraction (0=no overlap, 0.30=30%%)")
     parser.add_argument("--no-tta",  action="store_true",
                         help="Disable test-time augmentation (horizontal flip)")
-    parser.add_argument("--tile",    action="store_true",
-                        help="Enable tiled inference (experimental)")
+    parser.add_argument("--no-tile", action="store_true",
+                        help="Disable tiled inference")
     args = parser.parse_args()
 
     print(f"Input:  {args.input}",  flush=True)
@@ -286,10 +286,9 @@ def main():
     input_path = Path(args.input)
     images = sorted([f for f in input_path.iterdir()
                      if f.suffix.lower() in (".jpg", ".jpeg", ".png")])
-    print(f"Found {len(images)} images  tile={args.tile}  tta={not args.no_tta}", flush=True)
-
     do_tta  = not args.no_tta
-    do_tile = args.tile
+    do_tile = not args.no_tile
+    print(f"Found {len(images)} images  tile={do_tile}  tta={do_tta}", flush=True)
     predictions = []
 
     for img_path in images:

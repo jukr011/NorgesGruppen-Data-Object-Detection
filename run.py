@@ -167,8 +167,8 @@ def main():
                         help="Tile overlap fraction (0=no overlap, 0.25=25%%)")
     parser.add_argument("--no-tta",  action="store_true",
                         help="Disable test-time augmentation (horizontal flip)")
-    parser.add_argument("--no-tile", action="store_true",
-                        help="Disable tiled inference")
+    parser.add_argument("--tile",    action="store_true",
+                        help="Enable tiled inference (experimental)")
     args = parser.parse_args()
 
     print(f"Input:  {args.input}",  flush=True)
@@ -215,10 +215,10 @@ def main():
     input_path = Path(args.input)
     images = sorted([f for f in input_path.iterdir()
                      if f.suffix.lower() in (".jpg", ".jpeg", ".png")])
-    print(f"Found {len(images)} images  tile={not args.no_tile}  tta={not args.no_tta}", flush=True)
+    print(f"Found {len(images)} images  tile={args.tile}  tta={not args.no_tta}", flush=True)
 
     do_tta  = not args.no_tta
-    do_tile = not args.no_tile
+    do_tile = args.tile
     predictions = []
 
     for img_path in images:
